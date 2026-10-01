@@ -146,7 +146,8 @@ export default function App(){
   const [modal,setModal]=useState(null);
   const [settings,setSettings]=useState({background:"#080a0d",textColor:"#8d96a5",gridColor:"#171b22",crosshair:true,autoScale:true});
   const [indicatorSearch,setIndicatorSearch]=useState("");
-  const [activeIndicators,setActiveIndicators]=useState([]);\n  const [indicatorParams,setIndicatorParams]=useState({"RSI 14":{period:14},"ATR 14":{period:14},"MACD":{fast:12,slow:26,signal:9},"OBV":{}});
+  const [activeIndicators,setActiveIndicators]=useState([]);
+  const [indicatorParams,setIndicatorParams]=useState({"RSI 14":{period:14},"ATR 14":{period:14},"MACD":{fast:12,slow:26,signal:9},"OBV":{}});
 
   const load=async(s=symbol)=>{
     setLoading(true);
@@ -216,7 +217,8 @@ export default function App(){
           {loading&&<div className="loading">Loading EOD data…</div>}
           {rows.length?<PriceChart rows={rows} range={range} chartType={chartType} show44={show44} show50={show50} show200={show200} showVolume={showVolume} settings={settings} activeIndicators={activeIndicators} indicatorParams={indicatorParams} activeDraw={activeDraw}/>:<div className="loading">No data</div>}
         </div>
-        {activeIndicators.filter(n=>["RSI 14","ATR 14","MACD","Stochastic 14,3,3","CCI 20","ROC 12","Williams %R 14","ADX 14","OBV","MFI 14"].includes(n)).map(n=><IndicatorPane key={n} rows={rows} name={n} params={indicatorParams[n]||{}} onRemove={name=>setActiveIndicators(v=>v.filter(x=>x!==name))} onParams={name=>setModal("params:"+name)}/>) }\n        <div className="chart-statusbar">
+        {activeIndicators.filter(n=>["RSI 14","ATR 14","MACD","Stochastic 14,3,3","CCI 20","ROC 12","Williams %R 14","ADX 14","OBV","MFI 14"].includes(n)).map(n=><IndicatorPane key={n} rows={rows} name={n} params={indicatorParams[n]||{}} onRemove={name=>setActiveIndicators(v=>v.filter(x=>x!==name))} onParams={name=>setModal("params:"+name)}/>) }
+        <div className="chart-statusbar">
           <div>{["1d","1wk","1mo"].map(t=><button key={t} className={timeframe===t?"active":""} onClick={()=>setTimeframe(t)}>{t.toUpperCase()}</button>)}</div>
           <div className="active-tool">{activeDraw}</div>
           <div>Auto · NSE · EOD</div>
