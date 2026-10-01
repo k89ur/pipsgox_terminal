@@ -2,4 +2,4 @@
 
 .drawing-overlay{position:absolute;inset:0;width:100%;height:100%;z-index:5;pointer-events:auto;cursor:crosshair}.chart-host{position:relative}.chart-host canvas:first-child{z-index:1}.chart-host canvas.drawing-overlay{z-index:6}.tool-hint{pointer-events:none}
 
-.indicator-pane{border-top:1px solid #252a33;background:#080a0d;min-height:205px}.indicator-pane-title{height:25px;display:flex;align-items:center;padding:0 10px;color:#8d96a5;font-size:10px;letter-spacing:.5px;border-bottom:1px solid #171b22}.indicator-pane-chart{height:180px;width:100%}
+.indicator-pane{border-top:1px solid #252a33;background:#080a0d;min-height:195px;resize:vertical;overflow:auto;position:relative}.indicator-pane-title{height:25px;display:flex;align-items:center;justify-content:space-between;padding:0 10px;color:#8d96a5;font-size:10px;letter-spacing:.5px;border-bottom:1px solid #171b22}.indicator-pane-title button{border:0;background:transparent;color:#697384;font-size:16px;cursor:pointer;padding:0 5px}.indicator-pane-title button:hover{color:#fff}.indicator-pane-chart{height:170px;width:100%}
