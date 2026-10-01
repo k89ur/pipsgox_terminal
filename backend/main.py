@@ -18,15 +18,17 @@ def normalize_symbol(symbol: str) -> str:
     return symbol if symbol.endswith((".NS", ".BO")) else f"{symbol}.NS"
 
 @app.get("/data/chart/{symbol}")
-def chart(symbol: str, timeframe: str = "1d", period: str = "6mo"):
+def chart(symbol: str, timeframe: str = "1d", period: str = "max"):
     ticker = normalize_symbol(symbol)
     interval = {"1d": "1d", "1wk": "1wk", "1mo": "1mo"}.get(timeframe)
     if interval is None:
         raise HTTPException(400, "Only EOD timeframes 1d, 1wk and 1mo are supported.")
 
+    # Always load the complete available EOD history. The frontend controls
+    # the visible window (1M/3M/6M/1Y/5Y/MAX) without throwing away candles.
     data = yf.download(
         ticker,
-        period=period,
+        period="max",
         interval=interval,
         auto_adjust=False,
         progress=False,
