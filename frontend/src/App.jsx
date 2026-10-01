@@ -16,21 +16,64 @@ function DrawingOverlay({activeDraw,rows,onDraw}){
   return <canvas ref={ref} className="drawing-overlay" onClick={draw}/>;
 }
 
-function PriceChart({rows,range,chartType,show44,show50,show200,showVolume,settings,activeDraw,onDraw}){
+function PriceChart({rows,range,chartType,show44,show50,show200,showVolume,settings,activeIndicators=[],indicatorParams={},activeDraw,onDraw}){
   const host=useRef(null);
-  useEffect(()=>{if(!host.current||!rows.length)return;const chart=createChart(host.current,{layout:{background:{type:ColorType.Solid,color:settings.background},textColor:settings.textColor},grid:{vertLines:{color:settings.gridColor},horzLines:{color:settings.gridColor}},rightPriceScale:{borderColor:"#252a33",autoScale:settings.autoScale},timeScale:{borderColor:"#252a33",timeVisible:false},crosshair:{mode:settings.crosshair?1:0},height:host.current.clientHeight||620,width:host.current.clientWidth});
+  useEffect(()=>{
+    if(!host.current||!rows.length)return;
+    const chart=createChart(host.current,{
+      layout:{background:{type:ColorType.Solid,color:settings.background},textColor:settings.textColor},
+      grid:{vertLines:{color:settings.gridColor},horzLines:{color:settings.gridColor}},
+      rightPriceScale:{borderColor:"#252a33",autoScale:settings.autoScale},
+      timeScale:{borderColor:"#252a33",timeVisible:false},
+      crosshair:{mode:settings.crosshair?1:0},
+      height:host.current.clientHeight||620,width:host.current.clientWidth
+    });
+    const data=rows.map(r=>({time:r.time,open:r.open,high:r.high,low:r.low,close:r.close}));
     if(chartType==="line"){const s=chart.addSeries(LineSeries,{color:"#4da3ff",lineWidth:2});s.setData(rows.map(r=>({time:r.time,value:r.close})))}
     else if(chartType==="area"){const s=chart.addSeries(AreaSeries,{lineColor:"#4da3ff",topColor:"rgba(77,163,255,.22)",bottomColor:"rgba(77,163,255,0)",lineWidth:2});s.setData(rows.map(r=>({time:r.time,value:r.close})))}
     else if(chartType==="baseline"){const s=chart.addSeries(BaselineSeries,{baseValue:{type:"price",price:rows[0].close},topLineColor:"#19c784",bottomLineColor:"#ef4f5f"});s.setData(rows.map(r=>({time:r.time,value:r.close})))}
-    else if(chartType==="bar"){const s=chart.addSeries(BarSeries,{upColor:"#19c784",downColor:"#ef4f5f"});s.setData(rows.map(r=>({time:r.time,open:r.open,high:r.high,low:r.low,close:r.close})))}
-    else {const s=chart.addSeries(CandlestickSeries,{upColor:"#19c784",downColor:"#ef4f5f",borderUpColor:"#19c784",borderDownColor:"#ef4f5f",wickUpColor:"#19c784",wickDownColor:"#ef4f5f"});s.setData(rows.map(r=>({time:r.time,open:r.open,high:r.high,low:r.low,close:r.close})))}
-    const line=(k,c,t)=>{const s=chart.addSeries(LineSeries,{color:c,lineWidth:2,title:t,crosshairMarkerVisible:false});s.setData(rows.filter(r=>r[k]!=null).map(r=>({time:r.time,value:r[k]})))};
-    if(show44)line("sma44","#f2c94c","44 SMA");if(show50)line("sma50","#a970ff","50 SMA");if(show200)line("sma200","#4da3ff","200 SMA");
-    if(showVolume){const v=chart.addSeries(HistogramSeries,{priceFormat:{type:"volume"},priceScaleId:""});v.priceScale().applyOptions({scaleMargins:{top:.82,bottom:0}});v.setData(rows.map(r=>({time:r.time,value:r.volume,color:r.close>=r.open?"#294d42":"#5a2e36"})))}
+    else if(chartType==="bar"){const s=chart.addSeries(BarSeries,{upColor:"#19c784",downColor:"#ef4f5f"});s.setData(data)}
+    else {const s=chart.addSeries(CandlestickSeries,{upColor:"#19c784",downColor:"#ef4f5f",borderUpColor:"#19c784",borderDownColor:"#ef4f5f",wickUpColor:"#19c784",wickDownColor:"#ef4f5f"});s.setData(data)}
+
+    const C=rows.map(r=>r.close),H=rows.map(r=>r.high),L=rows.map(r=>r.low),V=rows.map(r=>r.volume||0);
+    const sma=(a,n)=>a.map((_,i)=>i<n-1?null:a.slice(i-n+1,i+1).reduce((x,y)=>x+y,0)/n);
+    const ema=(a,n)=>{const o=Array(a.length).fill(null);if(a.length<n)return o;let v=a.slice(0,n).reduce((x,y)=>x+y,0)/n;o[n-1]=v;const k=2/(n+1);for(let i=n;i<a.length;i++){v=a[i]*k+v*(1-k);o[i]=v}return o};
+    const wma=(a,n)=>a.map((_,i)=>{if(i<n-1)return null;const d=n*(n+1)/2;return a.slice(i-n+1,i+1).reduce((x,y,j)=>x+y*(j+1),0)/d});
+    const atr=(n=14)=>sma(rows.map((r,i)=>i?Math.max(r.high-r.low,Math.abs(r.high-rows[i-1].close),Math.abs(r.low-rows[i-1].close)):r.high-r.low),n);
+    const vwma=(n=20)=>C.map((_,i)=>{if(i<n-1)return null;const cv=C.slice(i-n+1,i+1),vv=V.slice(i-n+1,i+1),z=vv.reduce((a,b)=>a+b,0);return z?cv.reduce((a,x,j)=>a+x*vv[j],0)/z:null});
+    const hma=(n=20)=>{const a=wma(C,n/2),b=wma(C,n),raw=C.map((_,i)=>a[i]!=null&&b[i]!=null?2*a[i]-b[i]:null);return wma(raw.map(x=>x??0),Math.round(Math.sqrt(n))).map((x,i)=>raw[i]==null?null:x)};
+    const add=(vals,color,title,width=2)=>{const s=chart.addSeries(LineSeries,{color,lineWidth:width,title,crosshairMarkerVisible:false});s.setData(vals.map((v,i)=>v==null?null:{time:rows[i].time,value:v}).filter(Boolean));return s};
+    const bands=(mid,mult,sd)=>({mid,upper:mid.map((x,i)=>x==null?null:x+mult*sd[i]),lower:mid.map((x,i)=>x==null?null:x-mult*sd[i])});
+    const std=(a,n)=>a.map((_,i)=>{if(i<n-1)return null;const w=a.slice(i-n+1,i+1),m=w.reduce((x,y)=>x+y,0)/n;return Math.sqrt(w.reduce((x,y)=>x+(y-m)**2,0)/n)});
+    const boll=(n=20,m=2)=>bands(sma(C,n),m,std(C,n));
+    const don=(n=20)=>({upper:H.map((_,i)=>i<n-1?null:Math.max(...H.slice(i-n+1,i+1))),lower:L.map((_,i)=>i<n-1?null:Math.min(...L.slice(i-n+1,i+1)))});
+    const vwap=()=>{let pv=0,vol=0,o=[];for(let i=0;i<rows.length;i++){pv+=((H[i]+L[i]+C[i])/3)*V[i];vol+=V[i];o.push(vol?pv/vol:null)}return o};
+    const kelt=(n=20,m=2)=>{const mid=ema(C,n),a=atr(10);return {mid,upper:mid.map((x,i)=>x==null?null:x+m*(a[i]||0)),lower:mid.map((x,i)=>x==null?null:x-m*(a[i]||0))}};
+    const supertrend=(n=10,m=3)=>{const a=atr(n),u=[],l=[],st=[];for(let i=0;i<C.length;i++){const mid=(H[i]+L[i])/2,up=mid+m*(a[i]||0),dn=mid-m*(a[i]||0);if(i===0){u[i]=up;l[i]=dn;st[i]=C[i]>=mid?dn:up}else{u[i]=C[i-1]>u[i-1]?Math.min(up,u[i-1]):up;l[i]=C[i-1]<l[i-1]?Math.max(dn,l[i-1]):dn;st[i]=st[i-1]===u[i-1]?(C[i]<=u[i]?u[i]:l[i]):(C[i]>=l[i]?l[i]:u[i])}}return st};
+
+    if(show44)add(sma(C,44),"#f2c94c","44 SMA");
+    if(show50)add(sma(C,50),"#a970ff","50 SMA");
+    if(show200)add(sma(C,200),"#4da3ff","200 SMA");
+
+    const overlays=new Set(activeIndicators);
+    if(overlays.has("SMA 20"))add(sma(C,20),"#f2c94c","SMA 20");
+    if(overlays.has("EMA 20"))add(ema(C,20),"#4da3ff","EMA 20");
+    if(overlays.has("EMA 50"))add(ema(C,50),"#a970ff","EMA 50");
+    if(overlays.has("WMA 20"))add(wma(C,20),"#ffcf5c","WMA 20");
+    if(overlays.has("VWMA 20"))add(vwma(20),"#20c997","VWMA 20");
+    if(overlays.has("HMA 20"))add(hma(20),"#ff9f43","HMA 20");
+    if(overlays.has("Bollinger Bands")){const b=boll(20,2);add(b.upper,"#f2c94c","BB Upper");add(b.mid,"#8d96a5","BB Basis");add(b.lower,"#f2c94c","BB Lower")}
+    if(overlays.has("Keltner Channels")){const k=kelt();add(k.upper,"#4da3ff","KC Upper");add(k.mid,"#8d96a5","KC Basis");add(k.lower,"#4da3ff","KC Lower")}
+    if(overlays.has("Donchian Channels")){const d=don(20);add(d.upper,"#20c997","Donchian Upper");add(d.lower,"#20c997","Donchian Lower")}
+    if(overlays.has("Supertrend 10,3"))add(supertrend(10,3),"#20c997","Supertrend");
+    if(overlays.has("VWAP"))add(vwap(),"#ff9f43","VWAP");
+
+    if(showVolume){const v=chart.addSeries(HistogramSeries,{priceFormat:{type:"volume"},priceScaleId:""});v.priceScale().applyOptions({scaleMargins:{top:.82,bottom:0}});v.setData(rows.map(r=>({time:r.time,value:r.volume||0,color:r.close>=r.open?"#294d42":"#5a2e36"})))}
     if(range==="max")chart.timeScale().fitContent();else{const last=rows.at(-1).time,end=new Date(last*1000),s=new Date(last*1000);if(range==="1mo")s.setUTCMonth(end.getUTCMonth()-1);else if(range==="3mo")s.setUTCMonth(end.getUTCMonth()-3);else if(range==="6mo")s.setUTCMonth(end.getUTCMonth()-6);else if(range==="1y")s.setUTCFullYear(end.getUTCFullYear()-1);else if(range==="5y")s.setUTCFullYear(end.getUTCFullYear()-5);chart.timeScale().setVisibleRange({from:Math.floor(s.getTime()/1000),to:last})}
-    const resize=()=>chart.applyOptions({width:host.current.clientWidth,height:host.current.clientHeight||620});window.addEventListener("resize",resize);return()=>{window.removeEventListener("resize",resize);chart.remove()}
-  },[rows,range,chartType,show44,show50,show200,showVolume,settings]);
-  return <div className="chart-host" ref={host}><DrawingOverlay activeDraw={activeDraw} rows={rows} onDraw={onDraw}/>{modal?.startsWith("params:")&&<Modal title={modal.slice(7)+" Settings"} onClose={()=>setModal(null)}><div className="settings-list">{modal.slice(7)==="RSI 14"&&<label>Period <input type="number" min="2" max="100" value={indicatorParams["RSI 14"].period} onChange={e=>setIndicatorParams(v=>({...v,"RSI 14":{period:Number(e.target.value)||14}}))}/></label>}{modal.slice(7)==="ATR 14"&&<label>Period <input type="number" min="2" max="100" value={indicatorParams["ATR 14"].period} onChange={e=>setIndicatorParams(v=>({...v,"ATR 14":{period:Number(e.target.value)||14}}))}/></label>}{modal.slice(7)==="MACD"&&<><label>Fast <input type="number" min="2" max="100" value={indicatorParams.MACD.fast} onChange={e=>setIndicatorParams(v=>({...v,MACD:{...v.MACD,fast:Number(e.target.value)||12}}))}/></label><label>Slow <input type="number" min="2" max="200" value={indicatorParams.MACD.slow} onChange={e=>setIndicatorParams(v=>({...v,MACD:{...v.MACD,slow:Number(e.target.value)||26}}))}/></label><label>Signal <input type="number" min="2" max="100" value={indicatorParams.MACD.signal} onChange={e=>setIndicatorParams(v=>({...v,MACD:{...v.MACD,signal:Number(e.target.value)||9}}))}/></label></>}{!["RSI 14","ATR 14","MACD"].includes(modal.slice(7))&&<div className="modal-note">This indicator has no editable parameters yet.</div>}</div></Modal>}</div>;
+    const resize=()=>chart.applyOptions({width:host.current.clientWidth,height:host.current.clientHeight||620});window.addEventListener("resize",resize);
+    return()=>{window.removeEventListener("resize",resize);chart.remove()}
+  },[rows,range,chartType,show44,show50,show200,showVolume,settings,activeIndicators,indicatorParams]);
+  return <div className="chart-host" ref={host}><DrawingOverlay activeDraw={activeDraw} rows={rows} onDraw={onDraw}/></div>;
 }
 
 function Modal({title,onClose,children}){return <div className="modal-backdrop" onMouseDown={onClose}><div className="modal" onMouseDown={e=>e.stopPropagation()}><div className="modal-head"><strong>{title}</strong><button onClick={onClose}>×</button></div>{children}</div></div>}
@@ -171,9 +214,9 @@ export default function App(){
         {activeDraw!=="Cursor"&&<div className="tool-hint">Drawing tool: <b>{activeDraw}</b> · click the chart to use it</div>}
         <div className="chart-wrap">
           {loading&&<div className="loading">Loading EOD data…</div>}
-          {rows.length?<PriceChart rows={rows} range={range} chartType={chartType} show44={show44} show50={show50} show200={show200} showVolume={showVolume} settings={settings}/>:<div className="loading">No data</div>}
-        {activeIndicators.length>0&&<IndicatorOverlay rows={rows} active={activeIndicators}/>}</div>
-        {activeIndicators.map(n=><IndicatorPane key={n} rows={rows} name={n} params={indicatorParams[n]||{}} onRemove={name=>setActiveIndicators(v=>v.filter(x=>x!==name))} onParams={name=>setModal("params:"+name)}/>) }\n        <div className="chart-statusbar">
+          {rows.length?<PriceChart rows={rows} range={range} chartType={chartType} show44={show44} show50={show50} show200={show200} showVolume={showVolume} settings={settings} activeIndicators={activeIndicators} indicatorParams={indicatorParams} activeDraw={activeDraw}/>:<div className="loading">No data</div>}
+        </div>
+        {activeIndicators.filter(n=>["RSI 14","ATR 14","MACD","Stochastic 14,3,3","CCI 20","ROC 12","Williams %R 14","ADX 14","OBV","MFI 14"].includes(n)).map(n=><IndicatorPane key={n} rows={rows} name={n} params={indicatorParams[n]||{}} onRemove={name=>setActiveIndicators(v=>v.filter(x=>x!==name))} onParams={name=>setModal("params:"+name)}/>) }\n        <div className="chart-statusbar">
           <div>{["1d","1wk","1mo"].map(t=><button key={t} className={timeframe===t?"active":""} onClick={()=>setTimeframe(t)}>{t.toUpperCase()}</button>)}</div>
           <div className="active-tool">{activeDraw}</div>
           <div>Auto · NSE · EOD</div>
