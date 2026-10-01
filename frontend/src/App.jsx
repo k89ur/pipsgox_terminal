@@ -56,6 +56,7 @@ export default function App(){
   const [modal,setModal]=useState(null);
   const [settings,setSettings]=useState({background:"#080a0d",textColor:"#8d96a5",gridColor:"#171b22",crosshair:true,autoScale:true});
   const [indicatorSearch,setIndicatorSearch]=useState("");
+  const [activeIndicators,setActiveIndicators]=useState([]);
 
   const load=async(s=symbol)=>{
     setLoading(true);
@@ -72,6 +73,7 @@ export default function App(){
   const fmt=n=>n==null?"—":Number(n).toLocaleString("en-IN",{maximumFractionDigits:2});
   const filtered=watchlist.filter(s=>s.includes(watchSearch.toUpperCase()));
   const indicators=[["44 SMA",show44,set44],["50 SMA",show50,set50],["200 SMA",show200,set200],["Volume",showVolume,setVolume]];
+  const advanced=["SMA 20","EMA 20","EMA 50","RSI 14","ATR 14","MACD","Bollinger Bands","OBV"];
   const visibleIndicators=indicators.filter(x=>x[0].toLowerCase().includes(indicatorSearch.toLowerCase()));
 
   return <div className="terminal">
@@ -123,7 +125,7 @@ export default function App(){
         <div className="chart-wrap">
           {loading&&<div className="loading">Loading EOD data…</div>}
           {rows.length?<PriceChart rows={rows} range={range} chartType={chartType} show44={show44} show50={show50} show200={show200} showVolume={showVolume} settings={settings}/>:<div className="loading">No data</div>}
-        </div>
+        {activeIndicators.length>0&&<IndicatorOverlay rows={rows} active={activeIndicators}/>}</div>
         <div className="chart-statusbar">
           <div>{["1d","1wk","1mo"].map(t=><button key={t} className={timeframe===t?"active":""} onClick={()=>setTimeframe(t)}>{t.toUpperCase()}</button>)}</div>
           <div className="active-tool">{activeDraw}</div>
@@ -142,8 +144,8 @@ export default function App(){
 
     {modal==="indicators"&&<Modal title="Indicators" onClose={()=>setModal(null)}>
       <input className="modal-search" autoFocus value={indicatorSearch} onChange={e=>setIndicatorSearch(e.target.value)} placeholder="Search indicators…"/>
-      <div className="indicator-list">{visibleIndicators.map(([name,on,setOn])=><label key={name}><span>{name}</span><input type="checkbox" checked={on} onChange={e=>setOn(e.target.checked)}/></label>)}</div>
-      <div className="modal-note">More indicators will be added to the PIPSGOX indicator engine.</div>
+      <div className="indicator-list">{visibleIndicators.map(([name,on,setOn])=><label key={name}><span>{name}</span><input type="checkbox" checked={on} onChange={e=>setOn(e.target.checked)}/></label>)}{advanced.filter(n=>n.toLowerCase().includes(indicatorSearch.toLowerCase())).map(name=><label key={name}><span>{name}</span><input type="checkbox" checked={activeIndicators.includes(name)} onChange={e=>setActiveIndicators(v=>e.target.checked?[...v,name]:v.filter(x=>x!==name))}/></label>)}</div>
+      <div className="modal-note">Built-in PIPSGOX indicators are calculated locally from the loaded EOD series.</div>
     </Modal>}
 
     {modal==="chartType"&&<Modal title="Chart Type" onClose={()=>setModal(null)}>
