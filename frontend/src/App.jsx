@@ -7,63 +7,30 @@ const TF=["1m","3m","5m","15m","30m","1h","2h","4h","1d","1wk","1mo"];
 const RANGES=["1mo","3mo","6mo","1y","5y","max"];
 const DRAW_TOOLS=[["↖","Cursor"],["╱","Trend Line"],["—","Horizontal Line"],["│","Vertical Line"],["⌗","Parallel Channel"],["F","Fibonacci"],["□","Rectangle"],["○","Circle"],["↗","Long Position"],["↙","Short Position"],["T","Text"],["⌖","Measure"]];
 
-function PriceChart({rows,range,chartType,show44,show50,show200,showVolume,settings}){
+function DrawingOverlay({activeDraw,rows,onDraw}){
+  const ref=useRef(null); const [start,setStart]=useState(null); const [items,setItems]=useState([]);
+  useEffect(()=>{const el=ref.current;if(!el)return;const resize=()=>{el.width=el.clientWidth;el.height=el.clientHeight;};resize();window.addEventListener("resize",resize);return()=>window.removeEventListener("resize",resize)},[]);
+  const point=e=>{const r=ref.current.getBoundingClientRect();return{x:e.clientX-r.left,y:e.clientY-r.top}};
+  const draw=e=>{if(activeDraw==="Cursor")return;const p=point(e);if(!start){setStart(p);return;}setItems(v=>[...v,{type:activeDraw,a:start,b:p}]);setStart(null);onDraw?.();};
+  useEffect(()=>{const el=ref.current;if(!el)return;const ctx=el.getContext("2d");ctx.clearRect(0,0,el.width,el.height);ctx.lineWidth=1;ctx.strokeStyle="#7aa7ff";ctx.fillStyle="#7aa7ff";items.forEach(d=>{const {a,b}=d;if(d.type==="Horizontal Line"){ctx.beginPath();ctx.moveTo(0,a.y);ctx.lineTo(el.width,a.y);ctx.stroke()}else if(d.type==="Vertical Line"){ctx.beginPath();ctx.moveTo(a.x,0);ctx.lineTo(a.x,el.height);ctx.stroke()}else if(d.type==="Rectangle"){ctx.strokeRect(a.x,a.y,b.x-a.x,b.y-a.y)}else if(d.type==="Circle"){ctx.beginPath();ctx.ellipse((a.x+b.x)/2,(a.y+b.y)/2,Math.abs(b.x-a.x)/2,Math.abs(b.y-a.y)/2,0,0,Math.PI*2);ctx.stroke()}else if(d.type==="Fibonacci"){for(let i=0;i<5;i++){const y=a.y+(b.y-a.y)*[0,.236,.382,.618,1][i];ctx.beginPath();ctx.moveTo(a.x,y);ctx.lineTo(b.x,y);ctx.stroke()}}else{ctx.beginPath();ctx.moveTo(a.x,a.y);ctx.lineTo(b.x,b.y);ctx.stroke()}})},[items]);
+  return <canvas ref={ref} className="drawing-overlay" onClick={draw}/>;
+}
+
+function PriceChart({rows,range,chartType,show44,show50,show200,showVolume,settings,activeDraw,onDraw}){
   const host=useRef(null);
-  useEffect(()=>{
-    if(!host.current||!rows.length)return;
-    const chart=createChart(host.current,{
-      layout:{background:{type:ColorType.Solid,color:settings.background},textColor:settings.textColor},
-      grid:{vertLines:{color:settings.gridColor},horzLines:{color:settings.gridColor}},
-      rightPriceScale:{borderColor:"#252a33",autoScale:settings.autoScale},
-      timeScale:{borderColor:"#252a33",timeVisible:false},
-      crosshair:{mode:settings.crosshair?1:0},
-      height:host.current.clientHeight||620,width:host.current.clientWidth
-    });
-
-    if(chartType==="line"){
-      const s=chart.addSeries(LineSeries,{color:"#4da3ff",lineWidth:2,title:"Close"}); s.setData(rows.map(r=>({time:r.time,value:r.close})));
-    }else if(chartType==="area"){
-      const s=chart.addSeries(AreaSeries,{lineColor:"#4da3ff",topColor:"rgba(77,163,255,.22)",bottomColor:"rgba(77,163,255,0)",lineWidth:2,title:"Close"}); s.setData(rows.map(r=>({time:r.time,value:r.close})));
-    }else if(chartType==="baseline"){
-      const s=chart.addSeries(BaselineSeries,{baseValue:{type:"price",price:rows[0].close},topLineColor:"#19c784",bottomLineColor:"#ef4f5f",topFillColor1:"rgba(25,199,132,.16)",topFillColor2:"rgba(25,199,132,0)",bottomFillColor1:"rgba(239,79,95,0)",bottomFillColor2:"rgba(239,79,95,.16)",lineWidth:2}); s.setData(rows.map(r=>({time:r.time,value:r.close})));
-    }else if(chartType==="bar"){
-      const bars=chart.addSeries(BarSeries,{upColor:"#19c784",downColor:"#ef4f5f",openVisible:true,thinBars:false}); bars.setData(rows.map(r=>({time:r.time,open:r.open,high:r.high,low:r.low,close:r.close})));
-    }else{
-      const candles=chart.addSeries(CandlestickSeries,{
-        upColor:"#19c784",downColor:"#ef4f5f",borderUpColor:"#19c784",borderDownColor:"#ef4f5f",
-        wickUpColor:"#19c784",wickDownColor:"#ef4f5f"
-      });
-      candles.setData(rows.map(r=>({time:r.time,open:r.open,high:r.high,low:r.low,close:r.close})));
-    }
-
-    const line=(key,color,title)=>{const s=chart.addSeries(LineSeries,{color,lineWidth:2,title,crosshairMarkerVisible:false});s.setData(rows.filter(r=>r[key]!=null).map(r=>({time:r.time,value:r[key]})));};
-    if(show44)line("sma44","#f2c94c","44 SMA");
-    if(show50)line("sma50","#a970ff","50 SMA");
-    if(show200)line("sma200","#4da3ff","200 SMA");
-
-    if(showVolume){
-      const v=chart.addSeries(HistogramSeries,{priceFormat:{type:"volume"},priceScaleId:"",priceLineVisible:false});
-      v.priceScale().applyOptions({scaleMargins:{top:.82,bottom:0}});
-      v.setData(rows.map(r=>({time:r.time,value:r.volume,color:r.close>=r.open?"#294d42":"#5a2e36"})));
-    }
-
-    if(range==="max")chart.timeScale().fitContent();
-    else{
-      const last=rows[rows.length-1].time;
-      const end=new Date(last*1000),start=new Date(last*1000);
-      if(range==="1mo")start.setUTCMonth(end.getUTCMonth()-1);
-      else if(range==="3mo")start.setUTCMonth(end.getUTCMonth()-3);
-      else if(range==="6mo")start.setUTCMonth(end.getUTCMonth()-6);
-      else if(range==="1y")start.setUTCFullYear(end.getUTCFullYear()-1);
-      else if(range==="5y")start.setUTCFullYear(end.getUTCFullYear()-5);
-      chart.timeScale().setVisibleRange({from:Math.floor(start.getTime()/1000),to:last});
-    }
-
-    const resize=()=>chart.applyOptions({width:host.current.clientWidth,height:host.current.clientHeight||620});
-    window.addEventListener("resize",resize);
-    return()=>{window.removeEventListener("resize",resize);chart.remove()};
+  useEffect(()=>{if(!host.current||!rows.length)return;const chart=createChart(host.current,{layout:{background:{type:ColorType.Solid,color:settings.background},textColor:settings.textColor},grid:{vertLines:{color:settings.gridColor},horzLines:{color:settings.gridColor}},rightPriceScale:{borderColor:"#252a33",autoScale:settings.autoScale},timeScale:{borderColor:"#252a33",timeVisible:false},crosshair:{mode:settings.crosshair?1:0},height:host.current.clientHeight||620,width:host.current.clientWidth});
+    if(chartType==="line"){const s=chart.addSeries(LineSeries,{color:"#4da3ff",lineWidth:2});s.setData(rows.map(r=>({time:r.time,value:r.close})))}
+    else if(chartType==="area"){const s=chart.addSeries(AreaSeries,{lineColor:"#4da3ff",topColor:"rgba(77,163,255,.22)",bottomColor:"rgba(77,163,255,0)",lineWidth:2});s.setData(rows.map(r=>({time:r.time,value:r.close})))}
+    else if(chartType==="baseline"){const s=chart.addSeries(BaselineSeries,{baseValue:{type:"price",price:rows[0].close},topLineColor:"#19c784",bottomLineColor:"#ef4f5f"});s.setData(rows.map(r=>({time:r.time,value:r.close})))}
+    else if(chartType==="bar"){const s=chart.addSeries(BarSeries,{upColor:"#19c784",downColor:"#ef4f5f"});s.setData(rows.map(r=>({time:r.time,open:r.open,high:r.high,low:r.low,close:r.close})))}
+    else {const s=chart.addSeries(CandlestickSeries,{upColor:"#19c784",downColor:"#ef4f5f",borderUpColor:"#19c784",borderDownColor:"#ef4f5f",wickUpColor:"#19c784",wickDownColor:"#ef4f5f"});s.setData(rows.map(r=>({time:r.time,open:r.open,high:r.high,low:r.low,close:r.close})))}
+    const line=(k,c,t)=>{const s=chart.addSeries(LineSeries,{color:c,lineWidth:2,title:t,crosshairMarkerVisible:false});s.setData(rows.filter(r=>r[k]!=null).map(r=>({time:r.time,value:r[k]})))};
+    if(show44)line("sma44","#f2c94c","44 SMA");if(show50)line("sma50","#a970ff","50 SMA");if(show200)line("sma200","#4da3ff","200 SMA");
+    if(showVolume){const v=chart.addSeries(HistogramSeries,{priceFormat:{type:"volume"},priceScaleId:""});v.priceScale().applyOptions({scaleMargins:{top:.82,bottom:0}});v.setData(rows.map(r=>({time:r.time,value:r.volume,color:r.close>=r.open?"#294d42":"#5a2e36"})))}
+    if(range==="max")chart.timeScale().fitContent();else{const last=rows.at(-1).time,end=new Date(last*1000),s=new Date(last*1000);if(range==="1mo")s.setUTCMonth(end.getUTCMonth()-1);else if(range==="3mo")s.setUTCMonth(end.getUTCMonth()-3);else if(range==="6mo")s.setUTCMonth(end.getUTCMonth()-6);else if(range==="1y")s.setUTCFullYear(end.getUTCFullYear()-1);else if(range==="5y")s.setUTCFullYear(end.getUTCFullYear()-5);chart.timeScale().setVisibleRange({from:Math.floor(s.getTime()/1000),to:last})}
+    const resize=()=>chart.applyOptions({width:host.current.clientWidth,height:host.current.clientHeight||620});window.addEventListener("resize",resize);return()=>{window.removeEventListener("resize",resize);chart.remove()}
   },[rows,range,chartType,show44,show50,show200,showVolume,settings]);
-  return <div className="chart-host" ref={host}/>;
+  return <div className="chart-host" ref={host}><DrawingOverlay activeDraw={activeDraw} rows={rows} onDraw={onDraw}/></div>;
 }
 
 function Modal({title,onClose,children}){return <div className="modal-backdrop" onMouseDown={onClose}><div className="modal" onMouseDown={e=>e.stopPropagation()}><div className="modal-head"><strong>{title}</strong><button onClick={onClose}>×</button></div>{children}</div></div>}
