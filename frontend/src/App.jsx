@@ -30,7 +30,7 @@ function PriceChart({rows,range,chartType,show44,show50,show200,showVolume,setti
     if(range==="max")chart.timeScale().fitContent();else{const last=rows.at(-1).time,end=new Date(last*1000),s=new Date(last*1000);if(range==="1mo")s.setUTCMonth(end.getUTCMonth()-1);else if(range==="3mo")s.setUTCMonth(end.getUTCMonth()-3);else if(range==="6mo")s.setUTCMonth(end.getUTCMonth()-6);else if(range==="1y")s.setUTCFullYear(end.getUTCFullYear()-1);else if(range==="5y")s.setUTCFullYear(end.getUTCFullYear()-5);chart.timeScale().setVisibleRange({from:Math.floor(s.getTime()/1000),to:last})}
     const resize=()=>chart.applyOptions({width:host.current.clientWidth,height:host.current.clientHeight||620});window.addEventListener("resize",resize);return()=>{window.removeEventListener("resize",resize);chart.remove()}
   },[rows,range,chartType,show44,show50,show200,showVolume,settings]);
-  return <div className="chart-host" ref={host}><DrawingOverlay activeDraw={activeDraw} rows={rows} onDraw={onDraw}/></div>;
+  return <div className="chart-host" ref={host}><DrawingOverlay activeDraw={activeDraw} rows={rows} onDraw={onDraw}/>{modal?.startsWith("params:")&&<Modal title={modal.slice(7)+" Settings"} onClose={()=>setModal(null)}><div className="settings-list">{modal.slice(7)==="RSI 14"&&<label>Period <input type="number" min="2" max="100" value={indicatorParams["RSI 14"].period} onChange={e=>setIndicatorParams(v=>({...v,"RSI 14":{period:Number(e.target.value)||14}}))}/></label>}{modal.slice(7)==="ATR 14"&&<label>Period <input type="number" min="2" max="100" value={indicatorParams["ATR 14"].period} onChange={e=>setIndicatorParams(v=>({...v,"ATR 14":{period:Number(e.target.value)||14}}))}/></label>}{modal.slice(7)==="MACD"&&<><label>Fast <input type="number" min="2" max="100" value={indicatorParams.MACD.fast} onChange={e=>setIndicatorParams(v=>({...v,MACD:{...v.MACD,fast:Number(e.target.value)||12}}))}/></label><label>Slow <input type="number" min="2" max="200" value={indicatorParams.MACD.slow} onChange={e=>setIndicatorParams(v=>({...v,MACD:{...v.MACD,slow:Number(e.target.value)||26}}))}/></label><label>Signal <input type="number" min="2" max="100" value={indicatorParams.MACD.signal} onChange={e=>setIndicatorParams(v=>({...v,MACD:{...v.MACD,signal:Number(e.target.value)||9}}))}/></label></>}{!["RSI 14","ATR 14","MACD"].includes(modal.slice(7))&&<div className="modal-note">This indicator has no editable parameters yet.</div>}</div></Modal>}</div>;
 }
 
 function Modal({title,onClose,children}){return <div className="modal-backdrop" onMouseDown={onClose}><div className="modal" onMouseDown={e=>e.stopPropagation()}><div className="modal-head"><strong>{title}</strong><button onClick={onClose}>×</button></div>{children}</div></div>}
@@ -44,7 +44,7 @@ function atr(rows,n=14){const tr=rows.map((r,i)=>i?Math.max(r.high-r.low,Math.ab
 function macd(a,fast=12,slow=26,signal=9){const f=ema(a,fast),s=ema(a,slow),m=a.map((_,i)=>f[i]!=null&&s[i]!=null?f[i]-s[i]:null),sig=ema(m.map(x=>x??0),signal);return {macd:m,signal:sig,hist:m.map((x,i)=>x!=null&&sig[i]!=null?x-sig[i]:null)}}
 function bollinger(a,n=20,mult=2){const mid=sma(a,n),sd=std(a,n);return {mid,upper:mid.map((x,i)=>x==null?null:x+mult*sd[i]),lower:mid.map((x,i)=>x==null?null:x-mult*sd[i])}}
 function obv(rows){const o=Array(rows.length).fill(null);let v=0;for(let i=0;i<rows.length;i++){if(i)v+=rows[i].close>rows[i-1].close?rows[i].volume:rows[i].close<rows[i-1].close?-rows[i].volume:0;o[i]=v}return o}
-function IndicatorPane({rows,name,onRemove}){
+function IndicatorPane({rows,name,onRemove,params,onParams}){
   const host=useRef(null);
   useEffect(()=>{
     if(!host.current||!rows.length)return;
@@ -52,17 +52,17 @@ function IndicatorPane({rows,name,onRemove}){
     const close=rows.map(r=>r.close);
     const sma=(a,n)=>a.map((_,i)=>i<n-1?null:a.slice(i-n+1,i+1).reduce((x,y)=>x+y,0)/n);
     const ema=(a,n)=>{const o=Array(a.length).fill(null);if(a.length<n)return o;let v=a.slice(0,n).reduce((x,y)=>x+y,0)/n;o[n-1]=v;const k=2/(n+1);for(let i=n;i<a.length;i++){v=a[i]*k+v*(1-k);o[i]=v}return o};
-    const atr=()=>sma(rows.map((r,i)=>i?Math.max(r.high-r.low,Math.abs(r.high-rows[i-1].close),Math.abs(r.low-rows[i-1].close)):r.high-r.low),14);
-    const rsi=()=>{const o=Array(close.length).fill(null);let g=0,l=0;for(let i=1;i<=14;i++){const d=close[i]-close[i-1];g+=Math.max(d,0);l+=Math.max(-d,0)}let ag=g/14,al=l/14;o[14]=al===0?100:100-100/(1+ag/al);for(let i=15;i<close.length;i++){const d=close[i]-close[i-1];ag=(ag*13+Math.max(d,0))/14;al=(al*13+Math.max(-d,0))/14;o[i]=al===0?100:100-100/(1+ag/al)}return o};
+    const atr=(n=params.period||14)=>sma(rows.map((r,i)=>i?Math.max(r.high-r.low,Math.abs(r.high-rows[i-1].close),Math.abs(r.low-rows[i-1].close)):r.high-r.low),n);
+    const rsi=(n=params.period||14)=>{const o=Array(close.length).fill(null);let g=0,l=0;for(let i=1;i<=n;i++){const d=close[i]-close[i-1];g+=Math.max(d,0);l+=Math.max(-d,0)}let ag=g/n,al=l/n;o[n]=al===0?100:100-100/(1+ag/al);for(let i=n+1;i<close.length;i++){const d=close[i]-close[i-1];ag=(ag*(n-1)+Math.max(d,0))/n;al=(al*(n-1)+Math.max(-d,0))/n;o[i]=al===0?100:100-100/(1+ag/al)}return o};
     const obv=()=>{const o=[];let v=0;for(let i=0;i<rows.length;i++){if(i)v+=close[i]>close[i-1]?rows[i].volume:close[i]<close[i-1]?-rows[i].volume:0;o.push(v)}return o};
     const add=(vals,color,title)=>{const s=chart.addSeries(LineSeries,{color,lineWidth:2,title,crosshairMarkerVisible:false});s.setData(vals.map((v,i)=>v==null?null:{time:rows[i].time,value:v}).filter(Boolean))};
     if(name==="RSI 14")add(rsi(),"#20c997",name);
     if(name==="ATR 14")add(atr(),"#ff9f43",name);
     if(name==="OBV")add(obv(),"#8f7cff",name);
-    if(name==="MACD"){const f=ema(close,12),s=ema(close,26),m=close.map((_,i)=>f[i]!=null&&s[i]!=null?f[i]-s[i]:null),sig=ema(m.map(x=>x??0),9);add(m,"#4da3ff","MACD");add(sig,"#f2c94c","Signal")}
+    if(name==="MACD"){const f=ema(close,params.fast||12),s=ema(close,params.slow||26),m=close.map((_,i)=>f[i]!=null&&s[i]!=null?f[i]-s[i]:null),sig=ema(m.map(x=>x??0),params.signal||9);add(m,"#4da3ff","MACD");add(sig,"#f2c94c","Signal")}
     chart.timeScale().fitContent();const resize=()=>chart.applyOptions({width:host.current.clientWidth});window.addEventListener("resize",resize);resize();return()=>{window.removeEventListener("resize",resize);chart.remove()};
-  },[rows,name]);
-  return <div className="indicator-pane"><div className="indicator-pane-title"><span>{name}</span><button onClick={()=>onRemove(name)} title="Remove indicator">×</button></div><div ref={host} className="indicator-pane-chart"/></div>
+  },[rows,name,params]);
+  return <div className="indicator-pane"><div className="indicator-pane-title"><span>{name}</span><div><button onClick={()=>onParams(name)} title="Indicator settings">⚙</button><button onClick={()=>onRemove(name)} title="Remove indicator">×</button></div></div><div ref={host} className="indicator-pane-chart"/></div>
 }
 
 export default function App(){
@@ -75,7 +75,7 @@ export default function App(){
   const [modal,setModal]=useState(null);
   const [settings,setSettings]=useState({background:"#080a0d",textColor:"#8d96a5",gridColor:"#171b22",crosshair:true,autoScale:true});
   const [indicatorSearch,setIndicatorSearch]=useState("");
-  const [activeIndicators,setActiveIndicators]=useState([]);
+  const [activeIndicators,setActiveIndicators]=useState([]);\n  const [indicatorParams,setIndicatorParams]=useState({"RSI 14":{period:14},"ATR 14":{period:14},"MACD":{fast:12,slow:26,signal:9},"OBV":{}});
 
   const load=async(s=symbol)=>{
     setLoading(true);
@@ -145,7 +145,7 @@ export default function App(){
           {loading&&<div className="loading">Loading EOD data…</div>}
           {rows.length?<PriceChart rows={rows} range={range} chartType={chartType} show44={show44} show50={show50} show200={show200} showVolume={showVolume} settings={settings}/>:<div className="loading">No data</div>}
         {activeIndicators.length>0&&<IndicatorOverlay rows={rows} active={activeIndicators}/>}</div>
-        {activeIndicators.filter(n=>/RSI|MACD|ATR|OBV/.test(n)).map(n=><IndicatorPane key={n} rows={rows} name={n} onRemove={name=>setActiveIndicators(v=>v.filter(x=>x!==name))}/>)}\n        <div className="chart-statusbar">
+        {activeIndicators.filter(n=>/RSI|MACD|ATR|OBV/.test(n)).map(n=><IndicatorPane key={n} rows={rows} name={n} params={indicatorParams[n]||{}} onRemove={name=>setActiveIndicators(v=>v.filter(x=>x!==name))} onParams={name=>setModal("params:"+name)}/>) }\n        <div className="chart-statusbar">
           <div>{["1d","1wk","1mo"].map(t=><button key={t} className={timeframe===t?"active":""} onClick={()=>setTimeframe(t)}>{t.toUpperCase()}</button>)}</div>
           <div className="active-tool">{activeDraw}</div>
           <div>Auto · NSE · EOD</div>
