@@ -44,7 +44,29 @@ function atr(rows,n=14){const tr=rows.map((r,i)=>i?Math.max(r.high-r.low,Math.ab
 function macd(a,fast=12,slow=26,signal=9){const f=ema(a,fast),s=ema(a,slow),m=a.map((_,i)=>f[i]!=null&&s[i]!=null?f[i]-s[i]:null),sig=ema(m.map(x=>x??0),signal);return {macd:m,signal:sig,hist:m.map((x,i)=>x!=null&&sig[i]!=null?x-sig[i]:null)}}
 function bollinger(a,n=20,mult=2){const mid=sma(a,n),sd=std(a,n);return {mid,upper:mid.map((x,i)=>x==null?null:x+mult*sd[i]),lower:mid.map((x,i)=>x==null?null:x-mult*sd[i])}}
 function obv(rows){const o=Array(rows.length).fill(null);let v=0;for(let i=0;i<rows.length;i++){if(i)v+=rows[i].close>rows[i-1].close?rows[i].volume:rows[i].close<rows[i-1].close?-rows[i].volume:0;o[i]=v}return o}
-function IndicatorOverlay({rows,active}){const host=useRef(null);useEffect(()=>{if(!host.current||!rows.length||!active.length)return;const chart=createChart(host.current,{layout:{background:{type:ColorType.Solid,color:"#080a0d"},textColor:"#8d96a5"},grid:{vertLines:{color:"#171b22"},horzLines:{color:"#171b22"}},height:230});const close=rows.map(r=>r.close);const add=(vals,color,title)=>{const s=chart.addSeries(LineSeries,{color,lineWidth:2,title});s.setData(vals.map((v,i)=>v==null?null:{time:rows[i].time,value:v}).filter(Boolean))};for(const name of active){if(name==="SMA 20")add(sma(close,20),"#f2c94c",name);else if(name==="EMA 20")add(ema(close,20),"#4da3ff",name);else if(name==="EMA 50")add(ema(close,50),"#a970ff",name);else if(name==="RSI 14")add(rsi(close),"#20c997",name);else if(name==="ATR 14")add(atr(rows),"#ff9f43",name);else if(name==="OBV")add(obv(rows),"#8f7cff",name);else if(name==="MACD")add(macd(close).macd,"#4da3ff",name);else if(name==="Bollinger Bands"){const b=bollinger(close);add(b.upper,"#f2c94c","BB Upper");add(b.mid,"#8d96a5","BB Basis");add(b.lower,"#f2c94c","BB Lower")}}chart.timeScale().fitContent();const resize=()=>chart.applyOptions({width:host.current.clientWidth});window.addEventListener("resize",resize);return()=>{window.removeEventListener("resize",resize);chart.remove()}},[rows,active]);return <div className="indicator-pane"><div className="indicator-pane-title">{active.join(" · ")}</div><div ref={host} className="indicator-pane-chart"/></div>}
+function IndicatorOverlay({rows,active}){
+  const host=useRef(null);
+  useEffect(()=>{
+    if(!host.current||!rows.length||!active.length)return;
+    const chart=createChart(host.current,{layout:{background:{type:ColorType.Solid,color:"#080a0d"},textColor:"#8d96a5"},grid:{vertLines:{color:"#171b22"},horzLines:{color:"#171b22"}},height:180,rightPriceScale:{borderColor:"#252a33"},timeScale:{borderColor:"#252a33",timeVisible:false}});
+    const close=rows.map(r=>r.close);
+    const ema=(a,n)=>{const o=Array(a.length).fill(null);if(a.length<n)return o;let v=a.slice(0,n).reduce((x,y)=>x+y,0)/n;o[n-1]=v;const k=2/(n+1);for(let i=n;i<a.length;i++){v=a[i]*k+v*(1-k);o[i]=v}return o};
+    const sma=(a,n)=>a.map((_,i)=>i<n-1?null:a.slice(i-n+1,i+1).reduce((x,y)=>x+y,0)/n);
+    const atr=(n=14)=>sma(rows.map((r,i)=>i?Math.max(r.high-r.low,Math.abs(r.high-rows[i-1].close),Math.abs(r.low-rows[i-1].close)):r.high-r.low),n);
+    const rsi=(n=14)=>{const o=Array(close.length).fill(null);let g=0,l=0;for(let i=1;i<=n;i++){const d=close[i]-close[i-1];g+=Math.max(d,0);l+=Math.max(-d,0)}let ag=g/n,al=l/n;o[n]=al===0?100:100-100/(1+ag/al);for(let i=n+1;i<close.length;i++){const d=close[i]-close[i-1];ag=(ag*(n-1)+Math.max(d,0))/n;al=(al*(n-1)+Math.max(-d,0))/n;o[i]=al===0?100:100-100/(1+ag/al)}return o};
+    const obv=()=>{const o=[];let v=0;for(let i=0;i<rows.length;i++){if(i)v+=close[i]>close[i-1]?rows[i].volume:close[i]<close[i-1]?-rows[i].volume:0;o.push(v)}return o};
+    const add=(vals,color,title)=>{const s=chart.addSeries(LineSeries,{color,lineWidth:2,title,crosshairMarkerVisible:false});s.setData(vals.map((v,i)=>v==null?null:{time:rows[i].time,value:v}).filter(Boolean));return s};
+    const paneType=active.filter(n=>/RSI|MACD|ATR|OBV/.test(n));
+    if(active.includes("RSI 14"))add(rsi(),"#20c997","RSI 14");
+    if(active.includes("ATR 14"))add(atr(),"#ff9f43","ATR 14");
+    if(active.includes("OBV"))add(obv(),"#8f7cff","OBV");
+    if(active.includes("MACD")){const fast=ema(close,12),slow=ema(close,26),m=close.map((_,i)=>fast[i]!=null&&slow[i]!=null?fast[i]-slow[i]:null),sig=ema(m.map(x=>x??0),9);add(m,"#4da3ff","MACD");add(sig,"#f2c94c","Signal")}
+    chart.timeScale().fitContent();
+    const resize=()=>chart.applyOptions({width:host.current.clientWidth});window.addEventListener("resize",resize);resize();
+    return()=>{window.removeEventListener("resize",resize);chart.remove()};
+  },[rows,active]);
+  return <div className="indicator-pane"><div className="indicator-pane-title">INDICATORS · {active.join(" · ")}</div><div ref={host} className="indicator-pane-chart"/></div>
+}
 
 export default function App(){
   const [symbol,setSymbol]=useState("RELIANCE"),[input,setInput]=useState("RELIANCE");
