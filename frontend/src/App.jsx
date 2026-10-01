@@ -84,6 +84,10 @@ function IndicatorPane({rows,name,onRemove,params,onParams}){
     else if(name==="Keltner Channels"){let k=kelt();add(k.u,"#4da3ff","Upper");add(ema(C,20),"#8d96a5","Basis");add(k.l,"#4da3ff","Lower")}
     else if(name==="Donchian Channels"){let d=don();add(d.u,"#20c997","Upper");add(d.l,"#20c997","Lower")}
     else if(name==="VWAP")add(vwap(),"#ff9f43",name);
+    else if(name==="SMA 20")add(sma(C,20),"#f2c94c",name);
+    else if(name==="EMA 20")add(ema(C,20),"#4da3ff",name);
+    else if(name==="EMA 50")add(ema(C,50),"#a970ff",name);
+    else if(name==="Supertrend 10,3"){let n=10,mult=3,a=atr(n),u=[],l=[],st=[];for(let i=0;i<C.length;i++){let mid=(H[i]+L[i])/2,up=mid+mult*(a[i]||0),dn=mid-mult*(a[i]||0);if(i===0){u[i]=up;l[i]=dn;st[i]=C[i]>mid?dn:up}else{u[i]=C[i-1]>u[i-1]?Math.min(up,u[i-1]):up;l[i]=C[i-1]<l[i-1]?Math.max(dn,l[i-1]):dn;st[i]=st[i-1]===u[i-1]?(C[i]<=u[i]?u[i]:l[i]):(C[i]>=l[i]?l[i]:u[i])}}add(st,"#20c997",name)}
     chart.timeScale().fitContent();const resize=()=>chart.applyOptions({width:host.current.clientWidth});window.addEventListener("resize",resize);resize();return()=>{window.removeEventListener("resize",resize);chart.remove()};
   },[rows,name,params]);
   return <div className="indicator-pane"><div className="indicator-pane-title"><span>{name}</span><div><button onClick={()=>onParams(name)} title="Indicator settings">⚙</button><button onClick={()=>onRemove(name)} title="Remove indicator">×</button></div></div><div ref={host} className="indicator-pane-chart"/></div>
@@ -169,7 +173,7 @@ export default function App(){
           {loading&&<div className="loading">Loading EOD data…</div>}
           {rows.length?<PriceChart rows={rows} range={range} chartType={chartType} show44={show44} show50={show50} show200={show200} showVolume={showVolume} settings={settings}/>:<div className="loading">No data</div>}
         {activeIndicators.length>0&&<IndicatorOverlay rows={rows} active={activeIndicators}/>}</div>
-        {activeIndicators.filter(n=>/RSI|MACD|ATR|OBV/.test(n)).map(n=><IndicatorPane key={n} rows={rows} name={n} params={indicatorParams[n]||{}} onRemove={name=>setActiveIndicators(v=>v.filter(x=>x!==name))} onParams={name=>setModal("params:"+name)}/>) }\n        <div className="chart-statusbar">
+        {activeIndicators.map(n=><IndicatorPane key={n} rows={rows} name={n} params={indicatorParams[n]||{}} onRemove={name=>setActiveIndicators(v=>v.filter(x=>x!==name))} onParams={name=>setModal("params:"+name)}/>) }\n        <div className="chart-statusbar">
           <div>{["1d","1wk","1mo"].map(t=><button key={t} className={timeframe===t?"active":""} onClick={()=>setTimeframe(t)}>{t.toUpperCase()}</button>)}</div>
           <div className="active-tool">{activeDraw}</div>
           <div>Auto · NSE · EOD</div>
