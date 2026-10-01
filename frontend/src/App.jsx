@@ -1,9 +1,9 @@
 import React,{useEffect,useRef,useState} from "react";
-import {createChart,CandlestickSeries,HistogramSeries,LineSeries,ColorType} from "lightweight-charts";
+import {createChart,CandlestickSeries,HistogramSeries,LineSeries,AreaSeries,BaselineSeries,BarSeries,ColorType} from "lightweight-charts";
 
 const API=import.meta.env.VITE_API_URL||"";
 const INITIAL=["RELIANCE","TCS","INFY","HDFCBANK","ICICIBANK","SONACOMS","PGIL","SKYGOLD","DIVGIITTS","GNA","MENONBE"];
-const TF=["1d","1wk","1mo"];
+const TF=["1m","3m","5m","15m","30m","1h","2h","4h","1d","1wk","1mo"];
 const RANGES=["1mo","3mo","6mo","1y","5y","max"];
 const DRAW_TOOLS=[["↖","Cursor"],["╱","Trend Line"],["—","Horizontal Line"],["│","Vertical Line"],["⌗","Parallel Channel"],["F","Fibonacci"],["□","Rectangle"],["○","Circle"],["↗","Long Position"],["↙","Short Position"],["T","Text"],["⌖","Measure"]];
 
@@ -21,8 +21,13 @@ function PriceChart({rows,range,chartType,show44,show50,show200,showVolume,setti
     });
 
     if(chartType==="line"){
-      const s=chart.addSeries(LineSeries,{color:"#4da3ff",lineWidth:2,title:"Close"});
-      s.setData(rows.map(r=>({time:r.time,value:r.close})));
+      const s=chart.addSeries(LineSeries,{color:"#4da3ff",lineWidth:2,title:"Close"}); s.setData(rows.map(r=>({time:r.time,value:r.close})));
+    }else if(chartType==="area"){
+      const s=chart.addSeries(AreaSeries,{lineColor:"#4da3ff",topColor:"rgba(77,163,255,.22)",bottomColor:"rgba(77,163,255,0)",lineWidth:2,title:"Close"}); s.setData(rows.map(r=>({time:r.time,value:r.close})));
+    }else if(chartType==="baseline"){
+      const s=chart.addSeries(BaselineSeries,{baseValue:{type:"price",price:rows[0].close},topLineColor:"#19c784",bottomLineColor:"#ef4f5f",topFillColor1:"rgba(25,199,132,.16)",topFillColor2:"rgba(25,199,132,0)",bottomFillColor1:"rgba(239,79,95,0)",bottomFillColor2:"rgba(239,79,95,.16)",lineWidth:2}); s.setData(rows.map(r=>({time:r.time,value:r.close})));
+    }else if(chartType==="bar"){
+      const bars=chart.addSeries(BarSeries,{upColor:"#19c784",downColor:"#ef4f5f",openVisible:true,thinBars:false}); bars.setData(rows.map(r=>({time:r.time,open:r.open,high:r.high,low:r.low,close:r.close})));
     }else{
       const candles=chart.addSeries(CandlestickSeries,{
         upColor:"#19c784",downColor:"#ef4f5f",borderUpColor:"#19c784",borderDownColor:"#ef4f5f",
@@ -109,7 +114,7 @@ export default function App(){
         <button onClick={()=>select(input)}>↵</button>
       </div>
       <div className="toolbar-group">
-        {TF.map(t=><button key={t} className={timeframe===t?"active":""} onClick={()=>setTimeframe(t)}>{t.toUpperCase()}</button>)}
+        {["1d","1wk","1mo"].map(t=><button key={t} className={timeframe===t?"active":""} onClick={()=>setTimeframe(t)}>{t.toUpperCase()}</button>)}
         <button onClick={()=>setModal("timeframes")}>⌄</button>
       </div>
       <div className="toolbar-divider"/>
@@ -142,7 +147,7 @@ export default function App(){
           {rows.length?<PriceChart rows={rows} range={range} chartType={chartType} show44={show44} show50={show50} show200={show200} showVolume={showVolume} settings={settings}/>:<div className="loading">No data</div>}
         </div>
         <div className="chart-statusbar">
-          <div>{TF.map(t=><button key={t} className={timeframe===t?"active":""} onClick={()=>setTimeframe(t)}>{t.toUpperCase()}</button>)}</div>
+          <div>{["1d","1wk","1mo"].map(t=><button key={t} className={timeframe===t?"active":""} onClick={()=>setTimeframe(t)}>{t.toUpperCase()}</button>)}</div>
           <div className="active-tool">{activeDraw}</div>
           <div>Auto · NSE · EOD</div>
         </div>
@@ -164,12 +169,12 @@ export default function App(){
     </Modal>}
 
     {modal==="chartType"&&<Modal title="Chart Type" onClose={()=>setModal(null)}>
-      <div className="option-grid">{[["candle","Candles","▥"],["line","Line","╱"]].map(([v,n,i])=><button className={chartType===v?"selected":""} key={v} onClick={()=>{setChartType(v);setModal(null)}}><b>{i}</b><span>{n}</span></button>)}</div>
+      <div className="option-grid">{[["candle","Candles","▥"],["bar","Bars","┃"],["line","Line","╱"],["area","Area","◒"],["baseline","Baseline","═"]].map(([v,n,i])=><button className={chartType===v?"selected":""} key={v} onClick={()=>{setChartType(v);setModal(null)}}><b>{i}</b><span>{n}</span></button>)}</div>
     </Modal>}
 
     {modal==="timeframes"&&<Modal title="Timeframe" onClose={()=>setModal(null)}>
-      <div className="timeframe-grid">{["1D","1W","1M"].map(t=><button key={t} className={timeframe===t.toLowerCase().replace("w","wk").replace("m","mo")?"selected":""} onClick={()=>{setTimeframe(t==="1D"?"1d":t==="1W"?"1wk":"1mo");setModal(null)}}>{t}</button>)}</div>
-      <div className="modal-note">Intraday timeframes require an intraday market-data source. Current PIPSGOX data is EOD Yahoo Finance.</div>
+      <div className="timeframe-grid">{TF.map(t=><button key={t} className={timeframe===t?"selected":""} disabled={!["1d","1wk","1mo"].includes(t)} onClick={()=>{if(["1d","1wk","1mo"].includes(t)){setTimeframe(t);setModal(null)}}}>{t.toUpperCase()}</button>)}</div>
+      <div className="modal-note">Intraday timeframes are displayed in the UI, but remain disabled until an intraday data source is connected. Current PIPSGOX data is EOD Yahoo Finance.</div>
     </Modal>}
 
     {modal==="settings"&&<Modal title="Chart Settings" onClose={()=>setModal(null)}>
