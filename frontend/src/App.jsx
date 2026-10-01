@@ -49,17 +49,41 @@ function IndicatorPane({rows,name,onRemove,params,onParams}){
   useEffect(()=>{
     if(!host.current||!rows.length)return;
     const chart=createChart(host.current,{layout:{background:{type:ColorType.Solid,color:"#080a0d"},textColor:"#8d96a5"},grid:{vertLines:{color:"#171b22"},horzLines:{color:"#171b22"}},height:170,rightPriceScale:{borderColor:"#252a33"},timeScale:{borderColor:"#252a33",timeVisible:false}});
-    const close=rows.map(r=>r.close);
+    const C=rows.map(r=>r.close),H=rows.map(r=>r.high),L=rows.map(r=>r.low),V=rows.map(r=>r.volume);
     const sma=(a,n)=>a.map((_,i)=>i<n-1?null:a.slice(i-n+1,i+1).reduce((x,y)=>x+y,0)/n);
     const ema=(a,n)=>{const o=Array(a.length).fill(null);if(a.length<n)return o;let v=a.slice(0,n).reduce((x,y)=>x+y,0)/n;o[n-1]=v;const k=2/(n+1);for(let i=n;i<a.length;i++){v=a[i]*k+v*(1-k);o[i]=v}return o};
-    const atr=(n=params.period||14)=>sma(rows.map((r,i)=>i?Math.max(r.high-r.low,Math.abs(r.high-rows[i-1].close),Math.abs(r.low-rows[i-1].close)):r.high-r.low),n);
-    const rsi=(n=params.period||14)=>{const o=Array(close.length).fill(null);let g=0,l=0;for(let i=1;i<=n;i++){const d=close[i]-close[i-1];g+=Math.max(d,0);l+=Math.max(-d,0)}let ag=g/n,al=l/n;o[n]=al===0?100:100-100/(1+ag/al);for(let i=n+1;i<close.length;i++){const d=close[i]-close[i-1];ag=(ag*(n-1)+Math.max(d,0))/n;al=(al*(n-1)+Math.max(-d,0))/n;o[i]=al===0?100:100-100/(1+ag/al)}return o};
-    const obv=()=>{const o=[];let v=0;for(let i=0;i<rows.length;i++){if(i)v+=close[i]>close[i-1]?rows[i].volume:close[i]<close[i-1]?-rows[i].volume:0;o.push(v)}return o};
+    const wma=(a,n)=>a.map((_,i)=>{if(i<n-1)return null;let d=n*(n+1)/2;return a.slice(i-n+1,i+1).reduce((x,y,j)=>x+y*(j+1),0)/d});
+    const atr=(n=14)=>sma(rows.map((r,i)=>i?Math.max(r.high-r.low,Math.abs(r.high-rows[i-1].close),Math.abs(r.low-rows[i-1].close)):r.high-r.low),n);
+    const rsi=(n=14)=>{const o=Array(C.length).fill(null);let g=0,l=0;for(let i=1;i<=n;i++){let d=C[i]-C[i-1];g+=Math.max(d,0);l+=Math.max(-d,0)}let ag=g/n,al=l/n;o[n]=al?100-100/(1+ag/al):100;for(let i=n+1;i<C.length;i++){let d=C[i]-C[i-1];ag=(ag*(n-1)+Math.max(d,0))/n;al=(al*(n-1)+Math.max(-d,0))/n;o[i]=al?100-100/(1+ag/al):100}return o};
     const add=(vals,color,title)=>{const s=chart.addSeries(LineSeries,{color,lineWidth:2,title,crosshairMarkerVisible:false});s.setData(vals.map((v,i)=>v==null?null:{time:rows[i].time,value:v}).filter(Boolean))};
-    if(name==="RSI 14")add(rsi(),"#20c997",name);
-    if(name==="ATR 14")add(atr(),"#ff9f43",name);
-    if(name==="OBV")add(obv(),"#8f7cff",name);
-    if(name==="MACD"){const f=ema(close,params.fast||12),s=ema(close,params.slow||26),m=close.map((_,i)=>f[i]!=null&&s[i]!=null?f[i]-s[i]:null),sig=ema(m.map(x=>x??0),params.signal||9);add(m,"#4da3ff","MACD");add(sig,"#f2c94c","Signal")}
+    const obv=()=>{let v=0,o=[];for(let i=0;i<C.length;i++){if(i)v+=C[i]>C[i-1]?V[i]:C[i]<C[i-1]?-V[i]:0;o.push(v)}return o};
+    const mfi=(n=14)=>{let tp=rows.map(r=>(r.high+r.low+r.close)/3),o=Array(C.length).fill(null);for(let i=n;i<C.length;i++){let pos=0,neg=0;for(let j=i-n+1;j<=i;j++){let f=tp[j]*V[j];if(j&&tp[j]>tp[j-1])pos+=f;else if(j)neg+=f}o[i]=neg?100-100/(1+pos/neg):100}return o};
+    const stoch=(n=14,d=3)=>{let k=C.map((_,i)=>{if(i<n-1)return null;let hi=Math.max(...H.slice(i-n+1,i+1)),lo=Math.min(...L.slice(i-n+1,i+1));return hi===lo?0:100*(C[i]-lo)/(hi-lo)});return {k,d:sma(k.map(x=>x??0),d)}};
+    const cci=(n=20)=>{let tp=rows.map(r=>(r.high+r.low+r.close)/3);return tp.map((x,i)=>{if(i<n-1)return null;let m=tp.slice(i-n+1,i+1).reduce((a,b)=>a+b,0)/n,dev=tp.slice(i-n+1,i+1).reduce((a,b)=>a+Math.abs(b-m),0)/n;return dev?(x-m)/(.015*dev):0})};
+    const roc=(n=12)=>C.map((x,i)=>i<n?null:(x/C[i-n]-1)*100);
+    const will=(n=14)=>C.map((x,i)=>{if(i<n-1)return null;let hi=Math.max(...H.slice(i-n+1,i+1)),lo=Math.min(...L.slice(i-n+1,i+1));return hi===lo?0:-100*(hi-x)/(hi-lo)});
+    const adx=(n=14)=>{let tr=atr(n),p=Array(C.length).fill(null),m=Array(C.length).fill(null),dx=Array(C.length).fill(null);for(let i=1;i<C.length;i++){let up=H[i]-H[i-1],dn=L[i-1]-L[i];p[i]=up>dn&&up>0?up:0;m[i]=dn>up&&dn>0?dn:0}let ps=sma(p,n),ms=sma(m,n);for(let i=0;i<C.length;i++)if(tr[i]&&ps[i]!=null&&ms[i]!=null){let pi=100*ps[i]/tr[i],mi=100*ms[i]/tr[i];dx[i]=(pi+mi)?100*Math.abs(pi-mi)/(pi+mi):0}return sma(dx.map(x=>x??0),n)};
+    const boll=(n=20,m=2)=>{let mid=sma(C,n),sd=C.map((_,i)=>{if(i<n-1)return null;let w=C.slice(i-n+1,i+1),q=w.reduce((a,b)=>a+b,0)/n;return Math.sqrt(w.reduce((a,b)=>a+(b-q)**2,0)/n)});return {u:mid.map((x,i)=>x==null?null:x+m*sd[i]),l:mid.map((x,i)=>x==null?null:x-m*sd[i])}};
+    const kelt=()=>{let mid=ema(C,20),a=atr(10);return {u:mid.map((x,i)=>x==null?null:x+2*a[i]),l:mid.map((x,i)=>x==null?null:x-2*a[i])}};
+    const don=(n=20)=>({u:H.map((_,i)=>i<n-1?null:Math.max(...H.slice(i-n+1,i+1))),l:L.map((_,i)=>i<n-1?null:Math.min(...L.slice(i-n+1,i+1)))});
+    const vwap=()=>{let pv=0,vol=0,o=[];for(let i=0;i<rows.length;i++){pv+=(H[i]+L[i]+C[i])/3*V[i];vol+=V[i];o.push(vol?pv/vol:null)}return o};
+    if(name==="RSI 14")add(rsi(params.period||14),"#20c997",name);
+    else if(name==="ATR 14")add(atr(params.period||14),"#ff9f43",name);
+    else if(name==="OBV")add(obv(),"#8f7cff",name);
+    else if(name==="MFI 14")add(mfi(params.period||14),"#d48cff",name);
+    else if(name==="Stochastic 14,3,3"){let x=stoch(params.k||14,params.d||3);add(x.k,"#4da3ff","%K");add(x.d,"#f2c94c","%D")}
+    else if(name==="CCI 20")add(cci(params.period||20),"#ffcf5c",name);
+    else if(name==="ROC 12")add(roc(params.period||12),"#5ac8fa",name);
+    else if(name==="Williams %R 14")add(will(params.period||14),"#ff7aa2",name);
+    else if(name==="ADX 14")add(adx(params.period||14),"#9b8cff",name);
+    else if(name==="MACD"){let f=ema(C,params.fast||12),s=ema(C,params.slow||26),m=C.map((_,i)=>f[i]!=null&&s[i]!=null?f[i]-s[i]:null),sig=ema(m.map(x=>x??0),params.signal||9);add(m,"#4da3ff","MACD");add(sig,"#f2c94c","Signal")}
+    else if(name==="WMA 20")add(wma(C,20),"#f2c94c",name);
+    else if(name==="VWMA 20")add(C.map((_,i)=>{if(i<19)return null;let cv=C.slice(i-19,i+1),vv=V.slice(i-19,i+1),z=vv.reduce((a,b)=>a+b,0);return z?cv.reduce((a,x,j)=>a+x*vv[j],0)/z:null}),"#20c997",name);
+    else if(name==="HMA 20"){let n=20,a=wma(C,n/2),b=wma(C,n),raw=C.map((_,i)=>a[i]!=null&&b[i]!=null?2*a[i]-b[i]:null);add(wma(raw.map(x=>x??0),Math.round(Math.sqrt(n))),"#ff9f43",name)}
+    else if(name==="Bollinger Bands"){let b=boll();add(b.u,"#f2c94c","Upper");add(sma(C,20),"#8d96a5","Basis");add(b.l,"#f2c94c","Lower")}
+    else if(name==="Keltner Channels"){let k=kelt();add(k.u,"#4da3ff","Upper");add(ema(C,20),"#8d96a5","Basis");add(k.l,"#4da3ff","Lower")}
+    else if(name==="Donchian Channels"){let d=don();add(d.u,"#20c997","Upper");add(d.l,"#20c997","Lower")}
+    else if(name==="VWAP")add(vwap(),"#ff9f43",name);
     chart.timeScale().fitContent();const resize=()=>chart.applyOptions({width:host.current.clientWidth});window.addEventListener("resize",resize);resize();return()=>{window.removeEventListener("resize",resize);chart.remove()};
   },[rows,name,params]);
   return <div className="indicator-pane"><div className="indicator-pane-title"><span>{name}</span><div><button onClick={()=>onParams(name)} title="Indicator settings">⚙</button><button onClick={()=>onRemove(name)} title="Remove indicator">×</button></div></div><div ref={host} className="indicator-pane-chart"/></div>
