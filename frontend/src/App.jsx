@@ -13,7 +13,7 @@ function DrawingOverlay({activeDraw,rows,onDraw}){
   const point=e=>{const r=ref.current.getBoundingClientRect();return{x:e.clientX-r.left,y:e.clientY-r.top}};
   const draw=e=>{if(activeDraw==="Cursor")return;const p=point(e);if(!start){setStart(p);return;}setItems(v=>[...v,{type:activeDraw,a:start,b:p}]);setStart(null);onDraw?.();};
   useEffect(()=>{const el=ref.current;if(!el)return;const ctx=el.getContext("2d");ctx.clearRect(0,0,el.width,el.height);ctx.lineWidth=1;ctx.strokeStyle="#7aa7ff";ctx.fillStyle="#7aa7ff";items.forEach(d=>{const {a,b}=d;if(d.type==="Horizontal Line"){ctx.beginPath();ctx.moveTo(0,a.y);ctx.lineTo(el.width,a.y);ctx.stroke()}else if(d.type==="Vertical Line"){ctx.beginPath();ctx.moveTo(a.x,0);ctx.lineTo(a.x,el.height);ctx.stroke()}else if(d.type==="Rectangle"){ctx.strokeRect(a.x,a.y,b.x-a.x,b.y-a.y)}else if(d.type==="Circle"){ctx.beginPath();ctx.ellipse((a.x+b.x)/2,(a.y+b.y)/2,Math.abs(b.x-a.x)/2,Math.abs(b.y-a.y)/2,0,0,Math.PI*2);ctx.stroke()}else if(d.type==="Fibonacci"){for(let i=0;i<5;i++){const y=a.y+(b.y-a.y)*[0,.236,.382,.618,1][i];ctx.beginPath();ctx.moveTo(a.x,y);ctx.lineTo(b.x,y);ctx.stroke()}}else{ctx.beginPath();ctx.moveTo(a.x,a.y);ctx.lineTo(b.x,b.y);ctx.stroke()}})},[items]);
-  return <canvas ref={ref} className="drawing-overlay" onClick={draw}/>;
+  return <canvas ref={ref} className={`drawing-overlay ${activeDraw && activeDraw!=="Cursor"?"drawing-active":""}`} onClick={draw}/>;
 }
 
 function PriceChart({rows,range,chartType,show44,show50,show200,showVolume,settings,activeIndicators=[],indicatorParams={},activeDraw,onDraw}){
@@ -26,8 +26,15 @@ function PriceChart({rows,range,chartType,show44,show50,show200,showVolume,setti
       rightPriceScale:{borderColor:"#252a33",autoScale:settings.autoScale},
       timeScale:{borderColor:"#252a33",timeVisible:false},
       crosshair:{mode:settings.crosshair?1:0},
+      handleScale:{mouseWheel:true,pinch:true,axisPressedMouseMove:true},
+      handleScroll:{mouseWheel:true,pressedMouseMove:true,horzTouchDrag:true,vertTouchDrag:true},
       height:host.current.clientHeight||620,width:host.current.clientWidth
     });
+    const resizeObserver=new ResizeObserver(()=>chart.applyOptions({
+      width:host.current?.clientWidth||1,
+      height:host.current?.clientHeight||1
+    }));
+    resizeObserver.observe(host.current);
     const data=rows.map(r=>({time:r.time,open:r.open,high:r.high,low:r.low,close:r.close}));
     if(chartType==="line"){const s=chart.addSeries(LineSeries,{color:"#4da3ff",lineWidth:2});s.setData(rows.map(r=>({time:r.time,value:r.close})))}
     else if(chartType==="area"){const s=chart.addSeries(AreaSeries,{lineColor:"#4da3ff",topColor:"rgba(77,163,255,.22)",bottomColor:"rgba(77,163,255,0)",lineWidth:2});s.setData(rows.map(r=>({time:r.time,value:r.close})))}
@@ -71,7 +78,7 @@ function PriceChart({rows,range,chartType,show44,show50,show200,showVolume,setti
     if(showVolume){const v=chart.addSeries(HistogramSeries,{priceFormat:{type:"volume"},priceScaleId:""});v.priceScale().applyOptions({scaleMargins:{top:.82,bottom:0}});v.setData(rows.map(r=>({time:r.time,value:r.volume||0,color:r.close>=r.open?"#294d42":"#5a2e36"})))}
     if(range==="max")chart.timeScale().fitContent();else{const last=rows.at(-1).time,end=new Date(last*1000),s=new Date(last*1000);if(range==="1mo")s.setUTCMonth(end.getUTCMonth()-1);else if(range==="3mo")s.setUTCMonth(end.getUTCMonth()-3);else if(range==="6mo")s.setUTCMonth(end.getUTCMonth()-6);else if(range==="1y")s.setUTCFullYear(end.getUTCFullYear()-1);else if(range==="5y")s.setUTCFullYear(end.getUTCFullYear()-5);chart.timeScale().setVisibleRange({from:Math.floor(s.getTime()/1000),to:last})}
     const resize=()=>chart.applyOptions({width:host.current.clientWidth,height:host.current.clientHeight||620});window.addEventListener("resize",resize);
-    return()=>{window.removeEventListener("resize",resize);chart.remove()}
+    return()=>{resizeObserver.disconnect();window.removeEventListener("resize",resize);chart.remove()}
   },[rows,range,chartType,show44,show50,show200,showVolume,settings,activeIndicators,indicatorParams]);
   return <div className="chart-host" ref={host}><DrawingOverlay activeDraw={activeDraw} rows={rows} onDraw={onDraw}/></div>;
 }
