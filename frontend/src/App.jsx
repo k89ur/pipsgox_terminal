@@ -34,7 +34,7 @@ export default function App(){
 
   const load=async(s=symbol)=>{
     setLoading(true);
-    try{const r=await fetch(API+`/api/chart/${encodeURIComponent(s)}?timeframe=${timeframe}&period=${range}`);const j=await r.json();if(!r.ok)throw Error(j.detail||"Data request failed");setMeta(j);setRows(j.data)}catch(e){console.error(e);setRows([])}finally{setLoading(false)}
+    try{const r=await fetch(API+`/data/chart/${encodeURIComponent(s)}?timeframe=${timeframe}&period=${range}`);const j=await r.json();if(!r.ok)throw Error(j.detail||"Data request failed");setMeta(j);setRows(j.data)}catch(e){console.error(e);setRows([])}finally{setLoading(false)}
   };
   useEffect(()=>{load(symbol)},[symbol,timeframe,range]);
   const select=s=>{setSymbol(s);setInput(s)};
