@@ -192,7 +192,7 @@ export default function App(){
       <button className="toolbar-action" onClick={()=>setModal("chartType")}>{chartType==="candle"?"▥":"╱"} <span>{chartType==="candle"?"Candles":"Line"}</span>⌄</button>
       <button className="toolbar-action primary" onClick={()=>setModal("indicators")}>ƒx <span>Indicators</span></button>
       <button className="toolbar-action" onClick={()=>setModal("compare")}>＋ Compare</button>
-      <div className="range-strip">{RANGES.map(x=><button key={x} className={range===x?"active":""} onClick={()=>setRange(x)}>{x==="max"?"ALL":x.toUpperCase()}</button>)}</div>
+      
       <div className="top-spacer"/>
       <button className="toolbar-icon" onClick={()=>setModal("settings")}>⚙</button>
       <button className="toolbar-icon">⛶</button>
@@ -219,9 +219,13 @@ export default function App(){
         </div>
         {activeIndicators.filter(n=>["RSI 14","ATR 14","MACD","Stochastic 14,3,3","CCI 20","ROC 12","Williams %R 14","ADX 14","OBV","MFI 14"].includes(n)).map(n=><IndicatorPane key={n} rows={rows} name={n} params={indicatorParams[n]||{}} onRemove={name=>setActiveIndicators(v=>v.filter(x=>x!==name))} onParams={name=>setModal("params:"+name)}/>) }
         <div className="chart-statusbar">
-          <div>{["1d","1wk","1mo"].map(t=><button key={t} className={timeframe===t?"active":""} onClick={()=>setTimeframe(t)}>{t.toUpperCase()}</button>)}</div>
+          <div className="status-left">
+            {["1d","1wk","1mo"].map(t=><button key={t} className={timeframe===t?"active":""} onClick={()=>setTimeframe(t)}>{t.toUpperCase()}</button>)}
+            <span className="status-divider"/>
+            {RANGES.map(x=><button key={x} className={range===x?"active":""} onClick={()=>setRange(x)}>{x==="max"?"ALL":x.toUpperCase()}</button>)}
+          </div>
           <div className="active-tool">{activeDraw}</div>
-          <div>Auto · NSE · EOD</div>
+          <div className="status-right">Auto · NSE · EOD</div>
         </div>
       </section>
 
