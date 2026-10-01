@@ -92,7 +92,7 @@ export default function App(){
   const fmt=n=>n==null?"—":Number(n).toLocaleString("en-IN",{maximumFractionDigits:2});
   const filtered=watchlist.filter(s=>s.includes(watchSearch.toUpperCase()));
   const indicators=[["44 SMA",show44,set44],["50 SMA",show50,set50],["200 SMA",show200,set200],["Volume",showVolume,setVolume]];
-  const advanced=["SMA 20","EMA 20","EMA 50","RSI 14","ATR 14","MACD","Bollinger Bands","OBV"];
+  const advanced=["SMA 20","EMA 20","EMA 50","WMA 20","VWMA 20","HMA 20","RSI 14","ATR 14","MACD","Stochastic 14,3,3","CCI 20","ROC 12","Williams %R 14","ADX 14","Bollinger Bands","Keltner Channels","Donchian Channels","Supertrend 10,3","OBV","MFI 14","VWAP"];
   const visibleIndicators=indicators.filter(x=>x[0].toLowerCase().includes(indicatorSearch.toLowerCase()));
 
   return <div className="terminal">
